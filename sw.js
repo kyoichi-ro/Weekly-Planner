@@ -3,7 +3,7 @@
 
 var CACHE = 'weekly-planner-v1';
 var BASE = new URL('./', self.location).pathname;
-var STATIC = ['manifest.webmanifest', 'assets/icon-180.png', 'assets/icon-192.png', 'assets/icon-512.png', 'assets/logo-w.png', 'assets/splash-logo.png'];
+var STATIC = ['manifest.webmanifest', 'assets/icon-180.png', 'assets/icon-192.png', 'assets/icon-512.png', 'assets/logo-w.png', 'assets/splash-logo.png', 'assets/splash-name.png'];
 
 // index.html が読み込んでいる css と js の一覧を取り出す
 function assetsOf(html) {

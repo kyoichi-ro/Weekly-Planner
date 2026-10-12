@@ -393,7 +393,18 @@ textarea, input, select { font: inherit; color: inherit; }
   position: fixed; inset: 0; z-index: 100; background: var(--key); display: flex; align-items: center; justify-content: center;
   transition: opacity .22s ease;
 }
-#splash img { width: 220px; height: auto; }
+.sp-in { width: 220px; text-align: center; }
+.sp-w { display: block; width: 109px; height: 109px; margin: 0 auto -6px; animation: spWipe .8s cubic-bezier(.6, 0, .3, 1) both; }
+.sp-n { display: block; width: 220px; height: 30px; margin: 8px 0 12px; animation: spFade .45s .65s ease both; }
+.sp-o i:first-child { transform-origin: right center; }
+.sp-o i:last-child { transform-origin: left center; }
+.sp-o i { animation: spGrow .45s .9s ease-out both; }
+.sp-o b { animation: spPop .35s .95s ease-out both; }
+@keyframes spWipe { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes spFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes spGrow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes spPop { from { transform: rotate(45deg) scale(0); } to { transform: rotate(45deg) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .sp-w, .sp-n, .sp-o i, .sp-o b { animation: none; } }
 #splash.out { opacity: 0; pointer-events: none; }
 
 /* メニューの一番下: 版の数字と、最新にするボタン */
