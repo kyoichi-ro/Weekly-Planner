@@ -119,15 +119,51 @@
   // 画面に戻ってきたときにも、バックアップのお知らせを確かめる
   document.addEventListener('visibilitychange', function () { if (!document.hidden) WP.backup.remind().catch(fail); });
 
-  // 起動時のスプラッシュは、最初の画面が出たらすぐ消す
+  // 起動時のスプラッシュ。準備ができても、ロゴが見える長さ(開いてから約1秒)は出しておく
+  var SPLASH_MIN = 1000;
   function hideSplash() {
     var sp = document.getElementById('splash');
-    if (!sp) return;
-    sp.classList.add('out');
-    setTimeout(function () { sp.remove(); }, 260);
+    if (!sp) return Promise.resolve();
+    return new Promise(function (resolve) {
+      setTimeout(function () {
+        sp.classList.add('out');
+        setTimeout(function () { sp.remove(); resolve(); }, 260);
+      }, Math.max(0, SPLASH_MIN - performance.now()));
+    });
   }
 
-  DB.init().then(WP.backup.check).then(route).then(hideSplash, function (err) { hideSplash(); fail(err); }).then(WP.backup.remind).catch(fail);
+  DB.init().then(WP.backup.check).then(route).then(hideSplash, function (err) { fail(err); return hideSplash(); }).then(WP.backup.remind).catch(fail);
+
+  // iPhone でホーム画面から開いた瞬間に出る画像。index.html に用意した大きさに合わない機種では、
+  // その場で画面の大きさに合わせて作る(ホーム画面に追加するときに iPhone が読み取る)
+  (function () {
+    var ua = navigator.userAgent;
+    var ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+    if (!ios || navigator.standalone) return;
+    var ready = false, links = document.querySelectorAll('link[rel="apple-touch-startup-image"]');
+    for (var i = 0; i < links.length; i++) if (window.matchMedia(links[i].media).matches) ready = true;
+    var img = new Image();
+    img.onload = function () {
+      (ready ? ['landscape'] : ['portrait', 'landscape']).forEach(function (o) {
+        var dpr = window.devicePixelRatio || 1;
+        var w = Math.min(screen.width, screen.height), h = Math.max(screen.width, screen.height), t;
+        if (o === 'landscape') { t = w; w = h; h = t; }
+        var c = document.createElement('canvas');
+        c.width = w * dpr; c.height = h * dpr;
+        var x = c.getContext('2d');
+        x.fillStyle = '#EDE8FC';
+        x.fillRect(0, 0, c.width, c.height);
+        var lw = 220 * dpr, lh = lw * img.naturalHeight / img.naturalWidth;
+        x.drawImage(img, (c.width - lw) / 2, (c.height - lh) / 2, lw, lh);
+        var l = document.createElement('link');
+        l.rel = 'apple-touch-startup-image';
+        l.media = 'screen and (orientation: ' + o + ')';
+        l.href = c.toDataURL('image/png');
+        document.head.appendChild(l);
+      });
+    };
+    img.src = 'assets/splash-logo.png';
+  })();
 
   // 通信がなくても動くようにする仕組みを登録する。開発中のパソコン(localhost)では、
   // 古いファイルが残って紛らわしいので登録しない(?sw=1 を付けたときだけ試せる)
