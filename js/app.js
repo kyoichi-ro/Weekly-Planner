@@ -111,9 +111,26 @@
   setInterval(tick, 30000);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) tick(); });
 
+  // 今動いている版の数字(index.html が読み込んでいるファイルの ?v= の値)
+  function version() {
+    var m = /[?&]v=(\d+)/.exec((document.querySelector('script[src*="app.js"]') || {}).src || '');
+    return m ? m[1] : '-';
+  }
+  // 端末に保存してあるアプリのファイルを捨てて、最新を読み込み直す。入力したデータは消えない
+  function update() {
+    if (!navigator.onLine) { U.toast('通信できるときに、もう一度試してください'); return; }
+    var jobs = [];
+    if (window.caches) jobs.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }));
+    if (navigator.serviceWorker) {
+      jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); }));
+    }
+    Promise.all(jobs).catch(function () { return null; }).then(function () { location.reload(); });
+  }
+
   WP.app = {
     go: go, setDay: setDay, refresh: refresh, renderHeader: renderHeader, cur: function () { return cur; },
-    lastWeek: function () { return lastWs || U.mondayOf(U.today()); }
+    lastWeek: function () { return lastWs || U.mondayOf(U.today()); },
+    version: version, update: update
   };
 
   // 画面に戻ってきたときにも、バックアップのお知らせを確かめる

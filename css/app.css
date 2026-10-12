@@ -395,3 +395,7 @@ textarea, input, select { font: inherit; color: inherit; }
 }
 #splash img { width: 220px; height: auto; }
 #splash.out { opacity: 0; pointer-events: none; }
+
+/* メニューの一番下: 版の数字と、最新にするボタン */
+.dr-ver { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--soft); display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--mute); }
+.dr-ver button { color: var(--accent); border: 1px solid var(--line); border-radius: 999px; padding: 4px 14px; font-size: 13px; }

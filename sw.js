@@ -23,23 +23,29 @@ function prune(cache, list) {
   });
 }
 
-// 最新の index.html を取りにいき、それが使うファイルもまとめて保存する
-function refreshIndex(cache) {
+// 最新の index.html を取りにいく
+function fetchIndex() {
   return fetch('index.html', { cache: 'no-store' }).then(function (res) {
     if (!res.ok) throw new Error('index.html を取得できませんでした');
-    var copy = res.clone();
-    return res.text().then(function (html) {
-      var list = assetsOf(html);
+    return res;
+  });
+}
+
+// 取ってきた index.html と、それが使う css と js を保存し、古い版を消す
+function keep(cache, res) {
+  return res.clone().text().then(function (html) {
+    var list = assetsOf(html);
+    return cache.put('index.html', res).then(function () {
       return Promise.all(list.map(function (u) {
         return cache.match(u).then(function (hit) { return hit || cache.add(u); });
-      })).then(function () { return cache.put('index.html', copy); }).then(function () { return prune(cache, list); });
-    });
+      }));
+    }).then(function () { return prune(cache, list); });
   });
 }
 
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (cache) {
-    return cache.addAll(STATIC).then(function () { return refreshIndex(cache); });
+    return cache.addAll(STATIC).then(fetchIndex).then(function (res) { return keep(cache, res); });
   }).then(function () { return self.skipWaiting(); }));
 });
 
@@ -55,13 +61,14 @@ self.addEventListener('fetch', function (e) {
   var url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  // アプリの画面: 保存してあるものをすぐ返し、裏で最新を取りにいく(次に開いたときに新しくなる)
+  // アプリの画面: 通信できれば最新を使う。3秒待っても取れないときと、通信がないときは、保存してあるものを使う
   if (url.pathname === BASE || url.pathname === BASE + 'index.html') {
     e.respondWith(caches.open(CACHE).then(function (cache) {
-      return cache.match('index.html').then(function (hit) {
-        var fresh = refreshIndex(cache).catch(function () { return null; });
-        if (hit) { e.waitUntil(fresh); return hit; }
-        return fresh.then(function () { return cache.match('index.html'); }).then(function (r) { return r || fetch(req); });
+      var net = fetchIndex().catch(function () { return null; });
+      var limit = new Promise(function (resolve) { setTimeout(resolve, 3000, null); });
+      return Promise.race([net, limit]).then(function (res) {
+        if (res) { e.waitUntil(keep(cache, res.clone())); return res; }
+        return cache.match('index.html').then(function (hit) { return hit || net.then(function (r) { return r || fetch(req); }); });
       });
     }));
     return;

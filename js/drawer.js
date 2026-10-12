@@ -20,7 +20,7 @@
         '</span><span>' + it.label + (bk ? '<span class="sub">前回 ' + WP.backup.lastText() + '</span>' : '') + '</span>' +
         (it.ready ? '' : '<span class="soon">準備中</span>') + '</button>';
     });
-    h += '</nav></aside>';
+    h += '</nav><div class="dr-ver"><span>バージョン ' + WP.app.version() + '</span><button data-act="update">最新にする</button></div></aside>';
     wrap.innerHTML = h;
     wrap.hidden = false;
     requestAnimationFrame(function () { requestAnimationFrame(function () { wrap.classList.add('open'); }); });
@@ -37,6 +37,7 @@
     if (act === 'close') close();
     else if (act === 'genres' || act === 'records' || act === 'templates') { close(); WP.app.go(act); }
     else if (act === 'backup') { close(); WP.backup.openSheet(); }
+    else if (act === 'update') WP.app.update();
   });
 
   WP.drawer = { open: open, close: close };
