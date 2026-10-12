@@ -3,7 +3,19 @@
   'use strict';
   var WP = window.WP, U = WP.util, DB = WP.db;
   var HOUR = 48, PX = HOUR / 60, GUT = 30;
-  var state = { ws: null, data: null };
+  // early は、0〜6時を「もっと見る」で開いているかどうか
+  var state = { ws: null, data: null, early: false };
+  // ふだんは 6時より前を隠す(分で表した境目)
+  var EARLY = 360;
+
+  // その日に 6時より前の予定があれば、隠さずに見せる(隠すと予定が見えなくなるため)
+  function needsEarly(d) {
+    return d.plans.some(function (p) { return p.start_min < EARLY; });
+  }
+  function moreHTML(expanded) {
+    return '<button class="more" data-act="early">' + U.icon(expanded ? 'chevron-down' : 'chevron-up', 15) +
+      (expanded ? '0〜6時をたたむ' : 'もっと見る(0〜6時)') + '</button>';
+  }
   var enterDir = 0;
 
   function genreBg(data, id) { var g = id && data.genreMap[id]; return g ? g.color_light : 'var(--none)'; }
@@ -29,14 +41,14 @@
     }).join('') + '</div>';
   }
 
-  function blockHTML(it, data, cls) {
+  function blockHTML(it, data, cls, off) {
     var p = it.plan, dur = p.end_min - p.start_min;
     var left = (it.col / it.cols * 100), width = (100 / it.cols);
     var title = U.esc(planTitle(p, data));
     var inner = '';
     if (dur >= 60) inner = U.hm(p.start_min) + '–' + U.hm(p.end_min) + '<b>' + title + '</b>';
     else if (dur >= 30) inner = '<b>' + title + '</b>';
-    return '<div class="' + cls + (dur < 30 ? ' short' : '') + '" style="top:' + (p.start_min * PX) + 'px;height:' + (dur * PX - 1) +
+    return '<div class="' + cls + (dur < 30 ? ' short' : '') + '" style="top:' + ((p.start_min - off) * PX) + 'px;height:' + (dur * PX - 1) +
       'px;left:calc(' + left + '% + 2px);width:calc(' + width + '% - 4px);background:' + genreBg(data, p.genre_id) + '">' +
       (inner ? '<div class="wbt">' + inner + '</div>' : '') + (it.overlap ? '<span class="bdg"></span>' : '') + '</div>';
   }
@@ -45,6 +57,7 @@
   function render(ws, opts) {
     var old = opts && opts.keep && document.getElementById('wkScroll');
     var keep = old ? { top: old.scrollTop, left: old.scrollLeft } : { top: 0, left: 0 };
+    if (!old) state.early = false;
     return DB.loadWeek(ws).then(function (data) {
       state.ws = ws; state.data = data;
       data.todoMap = {};
@@ -93,14 +106,18 @@
         h += '</div>';
       }
 
+      // 6時より前は、予定があるときと、「もっと見る」を押したときだけ見せる
+      var must = data.days.some(needsEarly);
+      var expanded = must || state.early, off = expanded ? 0 : EARLY;
       h += '<div class="st wk-st"><span>TIMELINE</span><i class="rule"></i><b class="dia"></b></div>';
+      if (!must) h += '<div class="wk-more">' + moreHTML(expanded) + '</div>';
       h += '<div class="wk-row"><div class="gut">';
-      for (var hr = 0; hr < 24; hr++) h += '<div class="hr">' + hr + '</div>';
+      for (var hr = off / 60; hr < 24; hr++) h += '<div class="hr">' + hr + '</div>';
       h += '</div>';
       data.days.forEach(function (d) {
-        h += '<div class="col" data-day="' + d.day + '"><div class="tl">';
-        U.layoutPlans(d.plans).forEach(function (it) { h += blockHTML(it, data, 'wb'); });
-        if (d.day === today) h += '<div class="nowl" data-now style="top:' + (U.nowMin() * PX) + 'px"></div>';
+        h += '<div class="col" data-day="' + d.day + '"><div class="tl" style="height:' + ((1440 - off) * PX) + 'px">';
+        U.layoutPlans(d.plans).forEach(function (it) { h += blockHTML(it, data, 'wb', off); });
+        if (d.day === today) h += '<div class="nowl" data-now data-off="' + off + '" style="top:' + ((U.nowMin() - off) * PX) + 'px"></div>';
         h += '</div></div>';
       });
       h += '</div></div>';
@@ -150,6 +167,7 @@
         return;
       }
       if (e.target.closest('[data-act="backup-now"]')) { WP.backup.exportNow(); return; }
+      if (e.target.closest('[data-act="early"]')) { state.early = !state.early; render(state.ws, { keep: true }); return; }
       var tp = e.target.closest('[data-act="tpl-apply"], [data-act="tpl-remove"]');
       if (tp) {
         if (tp.dataset.act === 'tpl-apply') WP.template.openApply(state.ws);
@@ -248,5 +266,8 @@
   // ホイールの状態は、週を切り替えても引き継ぐ
   var wheel = { acc: 0, dir: 0, lastT: 0, startedAtEdge: false, locked: false, timer: null };
 
-  WP.week = { render: render, layout: layout, state: state, planTitle: planTitle, genreBg: genreBg, barHTML: barHTML, HOUR: HOUR, PX: PX };
+  WP.week = {
+    render: render, layout: layout, state: state, planTitle: planTitle, genreBg: genreBg, barHTML: barHTML, HOUR: HOUR, PX: PX,
+    EARLY: EARLY, needsEarly: needsEarly, moreHTML: moreHTML
+  };
 })();

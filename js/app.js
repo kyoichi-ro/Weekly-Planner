@@ -105,8 +105,8 @@
 
   // 現在時刻の線を動かす
   function tick() {
-    var top = U.nowMin() * WP.week.PX + 'px';
-    document.querySelectorAll('[data-now]').forEach(function (el) { el.style.top = top; });
+    var now = U.nowMin();
+    document.querySelectorAll('[data-now]').forEach(function (el) { el.style.top = ((now - (+el.dataset.off || 0)) * WP.week.PX) + 'px'; });
   }
   setInterval(tick, 30000);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) tick(); });

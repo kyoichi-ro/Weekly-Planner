@@ -3,15 +3,15 @@
   'use strict';
   var WP = window.WP, U = WP.util, DB = WP.db, W = WP.week;
   var PX = W.PX, HOUR = W.HOUR;
-  var state = { day: null, ws: null, data: null };
+  var state = { day: null, ws: null, data: null, early: false, resetWin: false };
 
-  function blockHTML(it, data) {
+  function blockHTML(it, data, off) {
     var p = it.plan, dur = p.end_min - p.start_min;
     var left = it.col / it.cols * 100, width = 100 / it.cols;
     var title = U.esc(W.planTitle(p, data)), time = U.hm(p.start_min) + '–' + U.hm(p.end_min);
     var inner = '';
     if (dur >= 30) inner = it.cols > 1 && dur >= 60 ? time + '<br>' + title : time + ' ' + title;
-    return '<div class="blk' + (dur < 30 ? ' short' : '') + '" data-plan="' + p.id + '" style="top:' + (p.start_min * PX) + 'px;height:' +
+    return '<div class="blk' + (dur < 30 ? ' short' : '') + '" data-plan="' + p.id + '" style="top:' + ((p.start_min - off) * PX) + 'px;height:' +
       (dur * PX - 1) + 'px;left:calc(' + left + '% + 1px);width:calc(' + width + '% - 2px);background:' + W.genreBg(data, p.genre_id) + '">' +
       (inner ? '<div class="wbt">' + inner + '</div>' : '') + (it.overlap ? '<span class="bdg"></span>' : '') + '</div>';
   }
@@ -32,13 +32,15 @@
     });
     h += '</div><button class="add" data-act="add-todo">' + U.icon('plus', 18) + '追加</button></div>';
 
-    h += '<div class="card"><div class="st"><span>TIMELINE</span><i class="rule"></i><b class="dia"></b></div>' +
-      '<div class="tlwin" data-act="timeline"><div class="tlin">';
-    for (var hr = 0; hr < 24; hr++) h += '<div class="hr">' + hr + '</div>';
+    // 6時より前は、予定があるときと、「もっと見る」を押したときだけ見せる
+    var must = W.needsEarly(d), expanded = must || state.early, off = expanded ? 0 : W.EARLY;
+    h += '<div class="card"><div class="st"><span>TIMELINE</span><i class="rule"></i><b class="dia"></b></div>' + (must ? '' : W.moreHTML(expanded)) +
+      '<div class="tlwin" data-act="timeline" data-off="' + off + '"><div class="tlin" style="height:' + ((1440 - off) * PX) + 'px">';
+    for (var hr = off / 60; hr < 24; hr++) h += '<div class="hr">' + hr + '</div>';
     h += '<div class="tl-area">';
-    U.layoutPlans(d.plans).forEach(function (it) { h += blockHTML(it, data); });
+    U.layoutPlans(d.plans).forEach(function (it) { h += blockHTML(it, data, off); });
     h += '</div>';
-    if (d.day === today) h += '<div class="nowl" data-now style="top:' + (U.nowMin() * PX) + 'px"></div>';
+    if (d.day === today) h += '<div class="nowl" data-now data-off="' + off + '" style="top:' + ((U.nowMin() - off) * PX) + 'px"></div>';
     h += '</div></div></div>';
 
     h += '<div class="card"><div class="st"><span>MEMO</span><i class="rule"></i><b class="dia"></b></div>' +
@@ -50,6 +52,7 @@
   function render(day, opts) {
     var ws = U.mondayOf(day);
     var keep = null;
+    if (!(opts && opts.keep)) state.early = false;
     if (opts && opts.keep && document.getElementById('pager')) {
       keep = {};
       document.querySelectorAll('.day-page').forEach(function (pg) {
@@ -70,15 +73,18 @@
       reposition();
       // タイムラインの枠の最初の位置。今日は現在時刻が真ん中、他の日は最初の予定(なければ6時)
       pager.querySelectorAll('.day-page').forEach(function (page, i) {
-        var d = data.days[i], win = page.querySelector('.tlwin'), top;
-        if (d.day === today) top = U.nowMin() * PX - win.clientHeight / 2;
-        else if (d.plans.length) top = d.plans[0].start_min * PX - 12;
-        else top = 6 * HOUR;
+        var d = data.days[i], win = page.querySelector('.tlwin'), off = +win.dataset.off, top;
+        if (d.day === today) top = (U.nowMin() - off) * PX - win.clientHeight / 2;
+        else if (d.plans.length) top = (d.plans[0].start_min - off) * PX - 12;
+        else top = (W.EARLY - off) * PX;
         win.scrollTop = Math.max(0, top);
         page.querySelectorAll('.memo').forEach(U.autoGrow);
-        if (keep && keep[d.day]) { page.scrollTop = keep[d.day].page; win.scrollTop = keep[d.day].win; }
+        if (keep && keep[d.day]) { page.scrollTop = keep[d.day].page; if (!state.resetWin) win.scrollTop = keep[d.day].win; }
+        // 「もっと見る」で開け閉めした直後は、表示中の日の枠を先頭から見せる
+        if (state.resetWin && d.day === day) win.scrollTop = 0;
         WP.sortable(page.querySelector('.todo-list'), '.todo', { onEnd: function (ids) { DB.reorder('todos', ids); } });
       });
+      state.resetWin = false;
       bind(pager);
       if (data.autoAdded.length) WP.template.reportOverlaps(ws, data.autoAdded);
     });
@@ -123,13 +129,14 @@
       if (e.target.closest('[data-act="add-todo"]')) { WP.todo.open({ day: state.day }); return; }
       var row = e.target.closest('[data-act="edit-todo"]');
       if (row) { WP.todo.open({ todo: state.data.todoMap[row.dataset.id] }); return; }
+      if (e.target.closest('[data-act="early"]')) { state.early = !state.early; state.resetWin = true; WP.app.refresh(); return; }
       var win = e.target.closest('[data-act="timeline"]');
       if (!win) return;
       var blk = e.target.closest('.blk[data-plan]');
       if (blk) { WP.plan.open({ plan: state.data.planMap[blk.dataset.plan] }); return; }
       // タップした位置の時刻を、15分単位に丸めて開始時刻にする
       var y = e.clientY - win.querySelector('.tlin').getBoundingClientRect().top;
-      var min = Math.max(0, Math.min(1380, Math.round(y / PX / 15) * 15));
+      var min = Math.max(0, Math.min(1380, Math.round((y / PX + (+win.dataset.off)) / 15) * 15));
       WP.plan.open({ day: win.closest('.day-page').dataset.day, start: min });
     });
 
