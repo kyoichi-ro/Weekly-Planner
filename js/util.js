@@ -71,12 +71,49 @@
   }
 
   var toastTimer;
-  function toast(msg) {
+  // opts.action を渡すと、押せるボタンを付ける(「元に戻す」など)。そのときは少し長く出す
+  function toast(msg, opts) {
     var el = document.getElementById('toast');
     el.textContent = msg;
+    if (opts && opts.action) {
+      var b = document.createElement('button');
+      b.textContent = opts.action;
+      b.onclick = function () { clearTimeout(toastTimer); el.hidden = true; opts.onAction(); };
+      el.appendChild(b);
+    }
     el.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { el.hidden = true; }, 2200);
+    toastTimer = setTimeout(function () { el.hidden = true; }, opts && opts.action ? 5000 : 2200);
+  }
+
+  // ドラッグを終えた直後のタップは、何もしない(離した場所のシートが開いたり閉じたりしないように)
+  var quiet = 0;
+  function hush() { quiet = Date.now() + 400; }
+  document.addEventListener('click', function (e) {
+    if (Date.now() < quiet) { e.stopPropagation(); e.preventDefault(); }
+  }, true);
+
+  // ドラッグ中に、枠の上端・下端の近く(edge px 以内)に指があるときの流す速さ(px/秒)。端に近いほど速い
+  function edgeSpeed(top, bottom, y, edge) {
+    if (y < top + edge) return -Math.max(30, Math.min(150, (top + edge - y) * 3));
+    if (y > bottom - edge) return Math.max(30, Math.min(150, (y - (bottom - edge)) * 3));
+    return 0;
+  }
+  // el を少しずつ流す関数を返す。呼ぶたびに、実際に流れた量を返す。端数は次へ持ち越す
+  function creep(el) {
+    var rest = 0, last = 0;
+    return function (speed, now) {
+      var dt = last ? Math.min(0.05, (now - last) / 1000) : 0.016;
+      last = now;
+      if (!speed) { rest = 0; return 0; }
+      rest += speed * dt;
+      var step = rest < 0 ? Math.ceil(rest) : Math.floor(rest);
+      if (!step) return 0;
+      rest -= step;
+      var before = el.scrollTop;
+      el.scrollTop = before + step;
+      return el.scrollTop - before;
+    };
   }
 
   // 複数行の入力欄を、中身の量に合わせて伸ばす
@@ -113,6 +150,7 @@
     toYMD: toYMD, parseYMD: parseYMD, isYMD: isYMD, addDays: addDays, mondayOf: mondayOf, today: today,
     weekDays: weekDays, md: md, weekday: weekday, weekLabel: weekLabel, dayLabel: dayLabel,
     hm: hm, nowMin: nowMin, durHTML: durHTML, durText: durText, esc: esc, uid: uid, nowISO: nowISO,
-    debounce: debounce, icon: icon, toast: toast, autoGrow: autoGrow, layoutPlans: layoutPlans
+    debounce: debounce, icon: icon, toast: toast, autoGrow: autoGrow, layoutPlans: layoutPlans,
+    hush: hush, edgeSpeed: edgeSpeed, creep: creep
   };
 })();

@@ -85,12 +85,13 @@
     return { read: read, refresh: function () { showTimes(); position(); } };
   }
 
-  // opts.plan があれば編集、なければ opts.day の opts.start(分)から1時間の予定を新しく作る
+  // opts.plan があれば編集、なければ opts.day の opts.start(分)からの予定を新しく作る。opts.end がなければ1時間
   function open(opts) {
     var p = opts.plan || null;
     draft = {
       plan: p, day: p ? p.day : opts.day,
-      start: p ? p.start_min : opts.start, end: p ? p.end_min : Math.min(opts.start + 60, DAY_END),
+      start: p ? p.start_min : opts.start,
+      end: p ? p.end_min : (opts.end != null ? opts.end : Math.min(opts.start + 60, DAY_END)),
       title: p ? p.title : '', genre_id: p ? p.genre_id : WP.todo.lastGenre(), todo_id: p ? p.todo_id : null,
       genreTouched: !!p, active: null, source: p ? p.source : 'manual', saveAs: false, saveName: ''
     };

@@ -3,17 +3,19 @@
   'use strict';
   var WP = window.WP, U = WP.util, DB = WP.db, W = WP.week;
   var PX = W.PX, HOUR = W.HOUR;
-  var state = { day: null, ws: null, data: null, early: false, resetWin: false };
+  var state = { day: null, ws: null, data: null, early: false, resetWin: false, selected: null };
 
   function blockHTML(it, data, off) {
     var p = it.plan, dur = p.end_min - p.start_min;
     var left = it.col / it.cols * 100, width = 100 / it.cols;
     var title = U.esc(W.planTitle(p, data)), time = U.hm(p.start_min) + '–' + U.hm(p.end_min);
-    var inner = '';
-    if (dur >= 30) inner = it.cols > 1 && dur >= 60 ? time + '<br>' + title : time + ' ' + title;
-    return '<div class="blk' + (dur < 30 ? ' short' : '') + '" data-plan="' + p.id + '" style="top:' + ((p.start_min - off) * PX) + 'px;height:' +
+    var inner = '', sel = state.selected === p.id;
+    if (dur >= 30) inner = '<span class="bt">' + time + '</span>' + (it.cols > 1 && dur >= 60 ? '<br>' : ' ') + title;
+    // 選んでいる予定には、長さを変えるためのハンドルを上下に付ける
+    return '<div class="blk' + (dur < 30 ? ' short' : '') + (sel ? ' sel' : '') + '" data-plan="' + p.id + '" style="top:' + ((p.start_min - off) * PX) + 'px;height:' +
       (dur * PX - 1) + 'px;left:calc(' + left + '% + 1px);width:calc(' + width + '% - 2px);background:' + W.genreBg(data, p.genre_id) + '">' +
-      (inner ? '<div class="wbt">' + inner + '</div>' : '') + (it.overlap ? '<span class="bdg"></span>' : '') + '</div>';
+      (inner ? '<div class="wbt">' + inner + '</div>' : '') + (it.overlap ? '<span class="bdg"></span>' : '') +
+      (sel ? '<i class="hd top"></i><i class="hd bot"></i>' : '') + '</div>';
   }
 
   function pageHTML(d, data, today) {
@@ -52,7 +54,7 @@
   function render(day, opts) {
     var ws = U.mondayOf(day);
     var keep = null;
-    if (!(opts && opts.keep)) state.early = false;
+    if (!(opts && opts.keep)) { state.early = false; state.selected = null; }
     if (opts && opts.keep && document.getElementById('pager')) {
       keep = {};
       document.querySelectorAll('.day-page').forEach(function (pg) {
@@ -66,6 +68,7 @@
         d.todos.forEach(function (t) { data.todoMap[t.id] = t; });
         d.plans.forEach(function (p) { data.planMap[p.id] = p; });
       });
+      if (state.selected && !data.planMap[state.selected]) state.selected = null;
       var today = U.today();
       var view = document.getElementById('view');
       view.innerHTML = '<div class="pager" id="pager">' + data.days.map(function (d) { return pageHTML(d, data, today); }).join('') + '</div>';
@@ -82,12 +85,35 @@
         if (keep && keep[d.day]) { page.scrollTop = keep[d.day].page; if (!state.resetWin) win.scrollTop = keep[d.day].win; }
         // 「もっと見る」で開け閉めした直後は、表示中の日の枠を先頭から見せる
         if (state.resetWin && d.day === day) win.scrollTop = 0;
-        WP.sortable(page.querySelector('.todo-list'), '.todo', { onEnd: function (ids) { DB.reorder('todos', ids); } });
+        WP.tldrag.bind(win, d.day);
+        // ToDo の行は、一覧の中では並べ替え、タイムラインの枠まで運ぶと予定になる
+        var list = page.querySelector('.todo-list'), carry = WP.tldrag.carrier(page, d.day);
+        WP.sortable(list, '.todo', {
+          scroller: page,
+          outside: carry.over,
+          drop: function (item, x, y) {
+            if (carry.drop(item)) return true;
+            // TO DO の枠の外で離したら、並べ替えずに元の位置へ戻す
+            var r = list.closest('.card').getBoundingClientRect();
+            return y < r.top || y > r.bottom;
+          },
+          cancel: carry.clear,
+          onEnd: function (ids) { DB.reorder('todos', ids); }
+        });
       });
       state.resetWin = false;
       bind(pager);
       if (data.autoAdded.length) WP.template.reportOverlaps(ws, data.autoAdded);
     });
+  }
+
+  // 予定を選んだ状態(ハンドルが出ている状態)をやめる
+  function deselect() {
+    state.selected = null;
+    var b = document.querySelector('.blk.sel');
+    if (!b) return;
+    b.classList.remove('sel');
+    b.querySelectorAll('.hd').forEach(function (h) { h.remove(); });
   }
 
   function index() { return U.weekDays(state.ws).indexOf(state.day); }
@@ -111,12 +137,18 @@
         raf = 0;
         if (!pager.clientWidth || pager.classList.contains('drag')) return;
         var d = state.data.days[Math.round(pager.scrollLeft / pager.clientWidth)];
-        if (d && d.day !== state.day) { state.day = d.day; WP.app.setDay(d.day); }
+        if (d && d.day !== state.day) { state.day = d.day; deselect(); WP.app.setDay(d.day); }
       });
     });
 
     pager.addEventListener('click', function (e) {
       if (dragged) { dragged = false; return; }
+      // 予定を選んでいるときは、ほかの場所を押すと解除する。タイムラインの中なら、解除だけして終わる
+      if (state.selected) {
+        var onSel = e.target.closest('.blk.sel');
+        deselect();
+        if (!onSel && e.target.closest('[data-act="timeline"]')) return;
+      }
       var chk = e.target.closest('[data-act="toggle"]');
       if (chk) {
         DB.toggleTodo(chk.dataset.id).then(function (t) {
@@ -181,5 +213,5 @@
     setTimeout(function () { pager.classList.remove('drag'); pager.dispatchEvent(new Event('scroll')); }, 320);
   });
 
-  WP.day = { render: render, reposition: reposition, step: step, state: state };
+  WP.day = { render: render, reposition: reposition, step: step, state: state, deselect: deselect };
 })();

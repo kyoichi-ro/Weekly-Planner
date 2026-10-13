@@ -186,11 +186,32 @@ textarea, input, select { font: inherit; color: inherit; }
 .todo .tx { min-width: 0; overflow-wrap: anywhere; }
 .todo, .g-row { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; cursor: pointer; }
 .dragging { position: relative; z-index: 6; box-shadow: 0 8px 20px rgba(42, 35, 64, .22); }
-.tlwin { position: relative; height: calc(var(--hour) * 6); overflow-y: auto; overscroll-behavior: contain; border-radius: 8px; }
+.tlwin { position: relative; height: calc(var(--hour) * 6); overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; border-radius: 8px; }
 .tlin { position: relative; height: calc(var(--hour) * 24); }
 .blk { position: absolute; border-radius: 9px; padding: 3px 10px; font-size: 14px; }
 .tlin .nowl { left: 32px; }
 .tlin .tl-area { position: absolute; left: 40px; right: 4px; top: 0; bottom: 0; }
+
+/* タイムラインでのドラッグ(移動、長さの変更、長押しでの新規作成、ToDoを運び入れる) */
+.tlwin { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.blk.sel { z-index: 3; box-shadow: 0 0 0 1.5px var(--accent); }
+.blk.lift { z-index: 5; box-shadow: 0 0 0 1.5px var(--accent), 0 8px 20px rgba(42, 35, 64, .26); }
+.blk.ghost { left: 1px; right: 1px; z-index: 5; background: rgba(75, 58, 148, .13); border: 1.5px dashed var(--accent); pointer-events: none; transition: height .08s ease; }
+.blk.ghost .wbt { opacity: .75; }
+.hd { position: absolute; width: 36px; height: 36px; z-index: 4; touch-action: none; cursor: ns-resize; }
+.hd::after {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px;
+  border-radius: 50%; background: #fff; border: 2px solid var(--accent);
+}
+.hd.top { top: -18px; right: 2px; }
+.hd.bot { bottom: -18px; left: 2px; }
+.dlab {
+  position: absolute; left: 0; bottom: calc(100% + 5px); z-index: 6; pointer-events: none;
+  background: var(--accent); color: #fff; font-size: 12.5px; line-height: 1; padding: 4px 9px; border-radius: 999px;
+  white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.dlab.in { bottom: auto; top: 3px; left: auto; right: 3px; }
+.todo.away { opacity: .4; box-shadow: none; }
 
 /* ドロワー */
 .drawer-wrap { position: fixed; inset: 0; z-index: 50; }
@@ -219,8 +240,9 @@ textarea, input, select { font: inherit; color: inherit; }
 .toast {
   position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 26px); transform: translateX(-50%);
   background: var(--accent); color: #fff; padding: 8px 18px; border-radius: 999px; font-size: 14px; z-index: 80;
-  max-width: 86%; text-align: center;
+  width: max-content; max-width: 86%; text-align: center;
 }
+.toast button { margin-left: 14px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
 
 @media (prefers-reduced-motion: reduce) {
   .wk-scroll.anim, .drawer, .drawer-dim, .pull svg { transition: none; }
