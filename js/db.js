@@ -13,7 +13,8 @@
   } catch (e) { /* 保存領域が使えない場合は通常モード */ }
 
   var DB_NAME = DEMO ? 'weekly-planner-demo' : 'weekly-planner';
-  var DB_VERSION = 1;
+  // 2: todo_templates を追加
+  var DB_VERSION = 2;
   var STORES = {
     genres: { keyPath: 'id' },
     weeks: { keyPath: 'week_start' },
@@ -25,6 +26,7 @@
     week_template_todos: { keyPath: 'id', indexes: ['template_id'] },
     template_applications: { keyPath: 'id', indexes: ['week_start'] },
     plan_templates: { keyPath: 'id' },
+    todo_templates: { keyPath: 'id' },
     settings: { keyPath: 'key' }
   };
 
@@ -57,7 +59,11 @@
           (STORES[name].indexes || []).forEach(function (ix) { os.createIndex(ix, ix); });
         });
       };
-      req.onsuccess = function () { resolve(req.result); };
+      req.onsuccess = function () {
+        // 別の画面が新しい形へ作り替えようとしたら、こちらは閉じて道をあける
+        req.result.onversionchange = function () { req.result.close(); };
+        resolve(req.result);
+      };
       req.onerror = function () { reject(req.error); };
     });
     return dbp;
@@ -389,6 +395,14 @@
       return put('template_applications', app);
     });
   }
+  function getTodoTemplates() { return getAll('todo_templates').then(function (l) { return l.sort(bySort); }); }
+  function saveTodoTemplate(tt) {
+    if (tt.id) return put('todo_templates', tt).then(function () { return tt; });
+    return nextOrder('todo_templates').then(function (order) {
+      var n = { id: U.uid(), title: tt.title, genre_id: tt.genre_id || null, sort_order: order };
+      return put('todo_templates', n).then(function () { return n; });
+    });
+  }
   function savePlanTemplate(pt) {
     if (pt.id) return put('plan_templates', pt).then(function () { return pt; });
     return nextOrder('plan_templates').then(function (order) {
@@ -429,6 +443,7 @@
     addTodo: addTodo, saveTodo: saveTodo, deleteTodo: deleteTodo, reorder: reorder, addGenre: addGenre, saveGenre: saveGenre, addPlan: addPlan, savePlan: savePlan,
     getWeekTemplates: getWeekTemplates, getPlanTemplates: getPlanTemplates, getTemplateItems: getTemplateItems,
     createWeekTemplate: createWeekTemplate, saveWeekTemplate: saveWeekTemplate, deleteWeekTemplate: deleteWeekTemplate,
-    applyTemplate: applyTemplate, applicationItems: applicationItems, removeApplication: removeApplication, savePlanTemplate: savePlanTemplate
+    applyTemplate: applyTemplate, applicationItems: applicationItems, removeApplication: removeApplication, savePlanTemplate: savePlanTemplate,
+    getTodoTemplates: getTodoTemplates, saveTodoTemplate: saveTodoTemplate
   };
 })();

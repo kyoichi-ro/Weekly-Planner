@@ -1,4 +1,4 @@
-// テンプレート(週テンプレートと予定テンプレート)
+// テンプレート(週テンプレート、予定テンプレート、ToDoテンプレート)
 (function () {
   'use strict';
   var WP = window.WP, U = WP.util, DB = WP.db;
@@ -272,10 +272,44 @@
     });
   }
 
+  // ---- ToDoテンプレートの追加と編集
+  function openTodoTpl(tt) {
+    DB.getGenres().then(function (genres) {
+      var d = { genre_id: tt ? tt.genre_id : null };
+      var h = '<p class="lab">タイトル</p><input class="field" id="ttTitle" maxlength="60" autocomplete="off" value="' + U.esc(tt ? tt.title : '') + '" placeholder="読書30分">' +
+        '<p class="lab">ジャンル</p><div class="chips" id="ttChips">' + WP.genre.chipsHTML(genres, d.genre_id, false) + '</div>' +
+        '<div class="err" id="ttErr" hidden></div><div class="act">' +
+        (tt ? '<button class="btn del" data-act="delete" aria-label="削除">' + U.icon('trash', 19) + '</button>' : '<span></span>') +
+        '<button class="btn pri" data-act="done">完了</button></div>';
+      var sheet = WP.sheet.open(h, {});
+      var titleEl = sheet.querySelector('#ttTitle');
+      if (!tt) titleEl.focus();
+      sheet.addEventListener('click', function (e) {
+        var chip = e.target.closest('#ttChips .chip[data-genre]');
+        if (chip) {
+          d.genre_id = chip.dataset.genre || null;
+          sheet.querySelectorAll('#ttChips .chip').forEach(function (c) { c.classList.toggle('sel', c === chip); });
+          return;
+        }
+        var act = e.target.closest('[data-act]');
+        if (!act) return;
+        if (act.dataset.act === 'done') {
+          var title = titleEl.value.trim();
+          if (!title) { var er = sheet.querySelector('#ttErr'); er.textContent = 'タイトルを入れてください'; er.hidden = false; titleEl.focus(); return; }
+          var rec = tt || {};
+          rec.title = title; rec.genre_id = d.genre_id;
+          DB.saveTodoTemplate(rec).then(function () { WP.sheet.close(); WP.app.refresh(); });
+        } else if (act.dataset.act === 'delete') {
+          DB.del('todo_templates', tt.id).then(function () { WP.sheet.close(); WP.app.refresh(); });
+        }
+      });
+    });
+  }
+
   // ---- テンプレートの一覧の画面
   function render() {
-    return Promise.all([DB.getWeekTemplates(), DB.getPlanTemplates(), DB.getGenres()]).then(function (r) {
-      var weekly = r[0], plan = r[1], genreMap = {};
+    return Promise.all([DB.getWeekTemplates(), DB.getPlanTemplates(), DB.getGenres(), DB.getTodoTemplates()]).then(function (r) {
+      var weekly = r[0], plan = r[1], todo = r[3], genreMap = {};
       r[2].forEach(function (g) { genreMap[g.id] = g; });
       var ws = WP.app.lastWeek();
       var h = '<div class="page"><div class="st out"><span>WEEKLY</span><i class="rule"></i><b class="dia"></b></div>';
@@ -301,13 +335,26 @@
       } else {
         h += '<div class="empty">予定テンプレートはまだありません。バイトのように時間が決まっている予定を、すぐ入れられます。</div>';
       }
-      h += '<button class="add out" data-act="add-plan">' + U.icon('plus', 18) + '予定テンプレートを追加</button></div>';
+      h += '<button class="add out" data-act="add-plan">' + U.icon('plus', 18) + '予定テンプレートを追加</button>';
+      h += '<div class="st out" style="margin-top:10px"><span>TODO</span><i class="rule"></i><b class="dia"></b></div>';
+      if (todo.length) {
+        h += '<div class="card list">' + todo.map(function (t) {
+          var g = t.genre_id && genreMap[t.genre_id];
+          return '<div class="li" role="button" tabindex="0" data-act="edit-todo-tpl" data-id="' + t.id + '" style="cursor:pointer"><span class="sw" style="background:' +
+            (g ? g.color_light : 'var(--none)') + ';border-color:' + (g ? g.color : '#B8B4C6') + '"></span><span>' + U.esc(t.title) + '</span>' +
+            U.icon('chevron-right', 17).replace('<svg', '<svg class="go"') + '</div>';
+        }).join('') + '</div>';
+      } else {
+        h += '<div class="empty">ToDoテンプレートはまだありません。よく使うToDoを、すぐ追加できます。</div>';
+      }
+      h += '<button class="add out" data-act="add-todo-tpl">' + U.icon('plus', 18) + 'ToDoテンプレートを追加</button></div>';
 
       var view = document.getElementById('view');
       view.innerHTML = h;
-      var wMap = {}, pMap = {};
+      var wMap = {}, pMap = {}, tMap = {};
       weekly.forEach(function (t) { wMap[t.id] = t; });
       plan.forEach(function (t) { pMap[t.id] = t; });
+      todo.forEach(function (t) { tMap[t.id] = t; });
       view.querySelector('.page').addEventListener('click', function (e) {
         var el = e.target.closest('[data-act]');
         if (!el) return;
@@ -323,6 +370,8 @@
         else if (act === 'add-week') openSave(ws);
         else if (act === 'edit-plan') openPlanTpl(pMap[el.dataset.id]);
         else if (act === 'add-plan') openPlanTpl(null);
+        else if (act === 'edit-todo-tpl') openTodoTpl(tMap[el.dataset.id]);
+        else if (act === 'add-todo-tpl') openTodoTpl(null);
       });
     });
   }
