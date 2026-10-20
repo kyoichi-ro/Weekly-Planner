@@ -1,9 +1,9 @@
 // 通信がなくても動くように、アプリのファイルを端末に保存しておく仕組み(サービスワーカー)
 'use strict';
 
-var CACHE = 'weekly-planner-v1';
+var CACHE = 'weekly-planner-v2';
 var BASE = new URL('./', self.location).pathname;
-var STATIC = ['manifest.webmanifest', 'assets/icon-180.png', 'assets/icon-192.png', 'assets/icon-512.png', 'assets/logo-w.png', 'assets/splash-logo.png', 'assets/splash-name.png'];
+var STATIC = ['manifest.webmanifest', 'assets/icon-180.png?v=2', 'assets/icon-192.png?v=2', 'assets/icon-512.png?v=2', 'assets/logo-w.png', 'assets/splash-logo.png', 'assets/splash-name.png'];
 
 // index.html が読み込んでいる css と js の一覧を取り出す
 function assetsOf(html) {
